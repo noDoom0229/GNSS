@@ -6,7 +6,7 @@
 -----------------------------------------------------------------------------*/
 #include "SPP.h"
 #include <map>
-#include <sstream>
+#include <cstdlib>
 
 // 去掉字符串两端的空白字符
 static string trim(const string& s)

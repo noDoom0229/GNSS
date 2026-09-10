@@ -291,15 +291,13 @@ int detect_cycle_slip(SDEpochObs& sdEpk)
         cur[i].MW = mw;
         cur[i].n = 1;
 
-        // 查找上一历元同一颗卫星的组合值
-        bool found = false;
+        // 查找上一历元同一颗卫星的组合值；第一次出现的卫星没有历史值，无法探测，按可用处理
         for (int j = 0; j < MAXCHANNUM; j++)
         {
             ComObs& pre = sdEpk.SdComObs[j];
             if (pre.n <= 0) continue;
             if (pre.Prn != sd.Prn || pre.Sys != sd.System) continue;
 
-            found = true;
             double dGF = fabs(gf - pre.GF);
             double dMW = fabs(mw - pre.MW);
             if (dGF < GFThres && dMW < MWThres)
@@ -315,8 +313,6 @@ int detect_cycle_slip(SDEpochObs& sdEpk)
             }
             break;
         }
-        // 第一次出现的卫星没有历史值可比，无法探测，本历元按可用处理
-        (void)found;
 
         if (sd.Valid[0] == 1 && sd.Valid[1] == 1) validNum++;
     }
