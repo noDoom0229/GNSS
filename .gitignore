@@ -9,3 +9,12 @@ x86/
 *.tlog
 *.ilk
 *.vcxproj.user
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+venv/
+
+# Large user RINEX (keep sample)
+# data/*.26o  # sample is committed
