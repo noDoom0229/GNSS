@@ -1,0 +1,10 @@
+# Visual Studio
+x64/
+x86/
+*.exe
+*.pdb
+*.obj
+*.idb
+*.tlog
+*.ilk
+.vs/

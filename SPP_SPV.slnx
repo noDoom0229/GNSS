@@ -1,0 +1,7 @@
+<Solution>
+  <Configurations>
+    <Platform Name="x64" />
+    <Platform Name="x86" />
+  </Configurations>
+  <Project Path="SPP_SPV.vcxproj" Id="006a8fa6-6ceb-40b8-b1e9-70d21eba7d12" />
+</Solution>
