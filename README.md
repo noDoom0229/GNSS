@@ -1,90 +1,80 @@
-# GNSS
+# GNSS 卫星导航程序设计
 
-卫星导航程序设计
+本项目包含两部分：
 
+1. **C++ SPP/SPV**：基于 NovAtel OEM 日志的单点定位与载波相位平滑伪距定位
+2. **Python GNSS 数据质量分析 (`gnss_qc`)**：按 BD 420022-2019《北斗/GNSS 测量型接收机观测数据质量评估方法》对 RINEX 3.x（`.26o`）观测文件做质量评估
 
+## 功能说明
 
-\# GNSS 卫星导航程序设计
+### SPP / SPV（C++）
 
-本项目实现GNSS单点定位(SPP)与载波相位平滑伪距定位(SPV)，基于C++开发，可处理NovAtel OEM系列接收机日志，完成GPS/BDS单系统与组合系统定位解算。
+1. 解析 NovAtel OEM 二进制日志，提取伪距、载波相位、星历等观测数据
+2. 坐标转换与误差模型修正
+3. SPP 伪距单点定位（GPS / GPS+BDS）
+4. SPV 载波相位平滑伪距定位
+5. 结果输出到 `Result/`
 
+### 观测数据质量分析（Python，`gnss_qc`）
 
+依据 BD 420022-2019 实现：
 
-\## ✨ 功能说明
+| 模块 | 内容 |
+|------|------|
+| RINEX 读取 | RINEX 3.x 多系统观测文件（`.26o` / `.rnx`） |
+| 完整率 | 双频有效历元 / 理论历元 |
+| 周跳探测 | MW 递推检验 + GF 补充探测，统计 o/slps |
+| 多路径 | 双频 MP1/MP2 组合 + 滑动窗口去模糊度 |
+| 电离层残差 | 双频相位电离层延迟及变化率 IOD |
+| 噪声 | 伪距/相位三次差噪声（式 21/23） |
+| 载噪比 | 各频点 CNR 均值统计 |
+| 输出 | 文本报告、CSV、PNG 图 |
 
-1\. 解析 NovAtel OEM 二进制日志，提取伪距、载波相位、星历等观测数据
+## 项目结构
 
-2\. 卫星位置、地球坐标系、站心坐标系之间的坐标转换
+```
+├── main.cpp / *.cpp / *.h     # SPP/SPV C++ 源码
+├── NovatelOEM*.log            # NovAtel 原始日志
+├── Result/                    # SPP/SPV 定位结果
+├── gnss_qc/                   # RINEX 质量分析工具包
+│   ├── rinex_reader.py
+│   ├── quality.py
+│   ├── report.py
+│   ├── generate_sample.py
+│   └── __main__.py
+├── data/                      # 示例 / 用户 RINEX（.26o）
+├── Result_QC/                 # 质量分析结果
+└── requirements-qc.txt
+```
 
-3\. 卫星钟差、电离层、对流层等定位误差模型修正
+## SPP/SPV 编译与运行
 
-4\. \*\*SPP 伪距单点定位\*\*：支持仅GPS、GPS+BDS组合定位
+- 语言：C++；工具：Visual Studio 2019/2022
+- 打开 `SPP_SPV.sln` 编译，读取 `NovatelOEM*.log`，结果写入 `Result/`
 
-5\. \*\*SPV 载波相位平滑伪距定位\*\*：提升定位平滑度与精度
+## 质量分析使用方法
 
-6\. 输出定位结果文本，保存到Result文件夹，便于绘图与精度评估
+```bash
+pip install -r requirements-qc.txt
 
+# 分析自己的 RINEX 观测文件（如 yygc1.26o）
+python -m gnss_qc /path/to/yygc1.26o --out Result_QC
 
+# 未提供文件时自动生成与用户格式一致的示例 .26o 并分析
+python -m gnss_qc --out Result_QC
 
-\## 📁 项目结构
+# 可选：只分析部分系统 / 限制历元
+python -m gnss_qc data/yygc1.26o --systems G,C --max-epochs 3600
+```
 
-SPP\_SPV/
+输出：
 
-├── main.cpp                 # 程序入口
+- `Result_QC/qc_report.txt` — 完整率、周跳比、MP、IOD、噪声、CNR
+- `Result_QC/qc_summary.csv` — 逐卫星指标
+- `Result_QC/qc_overview.png` 等 — 可视化图
 
-├── 3CoordSystemTrans.cpp    # 坐标转换模块
+将实测 `.26o` 放到 `data/` 后直接指定路径即可。
 
-├── 36OutPutResult.cpp        # 结果输出模块
+## 说明
 
-├── GnssConsts.h              # 常数定义
-
-├── GnssStructs.h             # 数据结构体
-
-├── GnssFuncDeclare.h         # 函数声明
-
-├── NovatelOEM\*.log           # NovAtel 接收机原始观测数据
-
-├── Result/
-
-│   ├── Result\_OnlyGPS.txt    # 仅 GPS 定位结果
-
-│   └── Result\_GPSBDS.txt     # GPS+BDS 组合定位结果
-
-├── SPP\_SPV.sln               # VS 工程解决方案
-
-└── SPP\_SPV.vcxproj           # VS 项目文件
-
-
-
-
-
-\## 🛠 编译环境
-
-\- 开发语言：C++
-
-\- 开发工具：Visual Studio 2019 / 2022
-
-\- 依赖：标准C++库，无第三方GNSS库
-
-
-
-\## 🚀 使用方法
-
-1\. 使用Visual Studio打开 `SPP\_SPV.sln`
-
-2\. 编译生成可执行文件
-
-3\. 程序读取根目录下 NovatelOEM\*.log 观测文件
-
-4\. 运行后定位结果自动写入`Result/`目录下txt文件
-
-
-
-\## 📌 说明
-
-> 本项目为卫星导航原理课程设计，用于学习GNSS单点定位、相位平滑伪距算法，仅用于教学学习。
-
-
-
-
-
+本项目为卫星导航原理课程相关实现，用于学习 GNSS 定位与观测数据质量评估，仅供教学学习。

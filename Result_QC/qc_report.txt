@@ -1,0 +1,127 @@
+========================================================================
+GNSS Observation Data Quality Assessment
+Reference: BD 420022-2019 北斗/GNSS测量型接收机观测数据质量评估方法
+========================================================================
+
+RINEX 3.04  marker=yygc1
+Approx XYZ: (-2245742.9269, 5064323.2954, 3150178.4754)
+Interval: 1.0 s
+First: 2026-07-03 07:04:04  Last: 2026-07-03 07:07:03
+Leap seconds: 18
+Observation types:
+  G (GPS): 12 -> C1C, C2W, C5X, L1C, L2W, L5X, D1C, D2W, D5X, S1C, S2W, S5X
+  R (GLONASS): 8 -> C1C, C2C, L1C, L2C, S1C, S2C, D1C, D2C
+  C (BDS): 12 -> C2I, C7I, C6I, L2I, L7I, L6I, S2I, S7I, S6I, D2I, D7I, D6I
+  E (Galileo): 12 -> C1X, C5X, C7X, L1X, L5X, L7X, S1X, S5X, S7X, D1X, D5X, D7X
+  J (QZSS): 11 -> C1C, C2X, C5X, L1C, L2X, L5X, D1C, D2X, D5X, S1C, S2X
+GLONASS channels: 3 slots
+Epochs loaded: 180
+
+------------------------------------------------------------------------
+System: G (GPS)
+  Dual-freq pair: C1C/L1C + C2W/L2W (bands 1/2)
+  Data completeness DIs (dual-freq): 100.00 %
+  Observed epochs (sum over sats): 720
+  Cycle-slip events: 4
+  Observations per slip (o/slps): 180.0
+  Multipath RMS MP1: 0.3034 m
+  Multipath RMS MP2: 0.2944 m
+  IOD RMS: 0.00208 m/s
+  IOD jumps (|IOD|>0.07 m/s): 0
+  Pseudorange noise: C1C=0.4791 m, C2W=0.4748 m
+  Carrier-phase noise: L1C=0.00490 cyc, L2W=0.00473 cyc
+  Mean CNR: S1C=43.02 dBHz, S2W=41.48 dBHz
+  Per-satellite summary:
+    SAT        N  Slip      MP1      MP2       IOD  IOD#
+    G05      180     4    0.339    0.302   0.00203     0
+    G15      180     0    0.297    0.278   0.00212     0
+    G24      180     0    0.287    0.312   0.00206     0
+    G29      180     0    0.291    0.286   0.00213     0
+
+------------------------------------------------------------------------
+System: R (GLONASS)
+  Dual-freq pair: C1C/L1C + C2C/L2C (bands 1/2)
+  Data completeness DIs (dual-freq): 100.00 %
+  Observed epochs (sum over sats): 540
+  Cycle-slip events: 0
+  Observations per slip (o/slps): Inf (no slips)
+  Multipath RMS MP1: 0.2951 m
+  Multipath RMS MP2: 0.2721 m
+  IOD RMS: 0.00237 m/s
+  IOD jumps (|IOD|>0.07 m/s): 0
+  Pseudorange noise: C1C=0.4627 m, C2C=0.4200 m
+  Carrier-phase noise: L1C=0.00495 cyc, L2C=0.00482 cyc
+  Mean CNR: S1C=40.45 dBHz, S2C=38.96 dBHz
+  Per-satellite summary:
+    SAT        N  Slip      MP1      MP2       IOD  IOD#
+    R09      180     0    0.322    0.273   0.00248     0
+    R10      180     0    0.303    0.264   0.00216     0
+    R22      180     0    0.261    0.279   0.00247     0
+
+------------------------------------------------------------------------
+System: C (BDS)
+  Dual-freq pair: C2I/L2I + C6I/L6I (bands 2/6)
+  Data completeness DIs (dual-freq): 100.00 %
+  Observed epochs (sum over sats): 720
+  Cycle-slip events: 4
+  Observations per slip (o/slps): 180.0
+  Multipath RMS MP1: 0.2951 m
+  Multipath RMS MP2: 0.2979 m
+  IOD RMS: 0.00262 m/s
+  IOD jumps (|IOD|>0.07 m/s): 0
+  Pseudorange noise: C2I=0.4575 m, C6I=0.4707 m
+  Carrier-phase noise: L2I=0.00506 cyc, L6I=0.00455 cyc
+  Mean CNR: S2I=39.34 dBHz, S6I=36.26 dBHz
+  Per-satellite summary:
+    SAT        N  Slip      MP1      MP2       IOD  IOD#
+    C01      180     0    0.286    0.297   0.00261     0
+    C06      180     4    0.307    0.272   0.00236     0
+    C11      180     0    0.286    0.320   0.00250     0
+    C23      180     0    0.301    0.303   0.00302     0
+
+------------------------------------------------------------------------
+System: E (Galileo)
+  Dual-freq pair: C1X/L1X + C5X/L5X (bands 1/5)
+  Data completeness DIs (dual-freq): 100.00 %
+  Observed epochs (sum over sats): 540
+  Cycle-slip events: 0
+  Observations per slip (o/slps): Inf (no slips)
+  Multipath RMS MP1: 0.2968 m
+  Multipath RMS MP2: 0.2870 m
+  IOD RMS: 0.00175 m/s
+  IOD jumps (|IOD|>0.07 m/s): 0
+  Pseudorange noise: C1X=0.4977 m, C5X=0.4924 m
+  Carrier-phase noise: L1X=0.00446 cyc, L5X=0.00487 cyc
+  Mean CNR: S1X=39.79 dBHz, S5X=38.34 dBHz
+  Per-satellite summary:
+    SAT        N  Slip      MP1      MP2       IOD  IOD#
+    E07      180     0    0.281    0.309   0.00179     0
+    E13      180     0    0.300    0.277   0.00153     0
+    E26      180     0    0.310    0.275   0.00191     0
+
+------------------------------------------------------------------------
+System: J (QZSS)
+  Dual-freq pair: C1C/L1C + C2X/L2X (bands 1/2)
+  Data completeness DIs (dual-freq): 100.00 %
+  Observed epochs (sum over sats): 180
+  Cycle-slip events: 0
+  Observations per slip (o/slps): Inf (no slips)
+  Multipath RMS MP1: 0.3065 m
+  Multipath RMS MP2: 0.2937 m
+  IOD RMS: 0.00201 m/s
+  IOD jumps (|IOD|>0.07 m/s): 0
+  Pseudorange noise: C1C=0.5331 m, C2X=0.4561 m
+  Carrier-phase noise: L1C=0.00432 cyc, L2X=0.00493 cyc
+  Mean CNR: S1C=44.15 dBHz, S2X=42.44 dBHz
+  Per-satellite summary:
+    SAT        N  Slip      MP1      MP2       IOD  IOD#
+    J03      180     0    0.306    0.294   0.00201     0
+
+========================================================================
+Notes:
+  - Completeness uses dual-frequency valid epochs / theoretical epochs.
+  - Cycle slips: MW recursive test + GF consecutive/poly residual (BD 6.2).
+  - Multipath: dual-freq MP combination with sliding-window detrending (BD 6.3).
+  - IOD: dI/dt from dual-freq phase ionosphere proxy (BD 6.4).
+  - Noise: triple-difference RMS (BD 6.5 / 6.6).
+========================================================================
