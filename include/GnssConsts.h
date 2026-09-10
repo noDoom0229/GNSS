@@ -102,10 +102,6 @@ extern int mode;
 #define  WL1_BDS  (C_Light/FG1_BDS)              // BDS B1I波长
 #define  WL3_BDS  (C_Light/FG3_BDS)              // BDS B3I波长
 
-//  周跳/粗差探测阈值 
-#define GFThres         0.5                   // GF 组合阈值
-#define MWThres         1.0                   // MW 组合阈值
-
 //对流层 Hopfield 模型
 #define  Htrop        15000.0                // 对流层有效高度 (m)
 #define  SeaLevel     0.0                    // 海平面/基准海拔

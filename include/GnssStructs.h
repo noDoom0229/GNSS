@@ -287,6 +287,9 @@ struct DDCOBS
 // ==========================================================
 //                     单点定位SPP/SPV结果
 // ==========================================================
+// 解算结果类型（报告 3.1.1 SPP.h）：编号不可改动
+enum resultType { None = 0, SPP_SPV = 1, RTKFloat = 2, RTKFixed = 3, BESTpos = 4 };
+
 struct PPRESULT
 {
     GPSTIME Time;             // 解算时间
@@ -297,9 +300,11 @@ struct PPRESULT
     double PDOP, SigmaPos, SigmaVel;  // 精度指标
     short GPSSatNum, BDSSatNum, AllSatNum;  // 卫星数
     bool IsSuccess;           // 解算是否成功
+    resultType Type;          // 结果类型（None/SPP_SPV/RTKFloat/RTKFixed）
 
     PPRESULT()
     {
+        Type = None;
         Time.Week = 0; Time.SecOfWeek = 0.0;
         Position[0] = -2267810.173;
         Position[1] = 5009324.109;

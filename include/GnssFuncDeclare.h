@@ -4,6 +4,15 @@
 #include <iostream>
 #include <fstream>
 #include <iomanip>
+#include <cstring>
+#include <string>
+#include <vector>
+
+// winsock2.h 必须在 windows.h 之前包含，否则与旧版 winsock.h 冲突
+#define WIN32_LEAN_AND_MEAN
+#define NOMINMAX
+#include <winsock2.h>
+#include <ws2tcpip.h>
 #include <windows.h>
 
 using namespace std;
@@ -45,6 +54,18 @@ double vector_multiply(const double* a, const double* b, int size);
 void vector_cross_multiply(const double a[3], const double b[3], double c[3]);
 // 向量模长
 double vector_magnitude(const double* vec, int size);
+
+// ---------- RTK 新增：基于 vector 的任意维矩阵运算（维数随卫星数变化） ----------
+typedef vector<vector<double>> Mat;   // Mat[i][j] 第 i 行第 j 列
+typedef vector<double> Vec;
+Mat  mat_zero(int rows, int cols);                 // 全零矩阵
+Mat  mat_eye(int n);                               // 单位阵
+Mat  mat_trans(const Mat& A);                      // 转置
+Mat  mat_mul(const Mat& A, const Mat& B);          // A * B
+Vec  mat_mul_vec(const Mat& A, const Vec& v);      // A * v
+Mat  mat_add(const Mat& A, const Mat& B);          // A + B
+Mat  mat_sub(const Mat& A, const Mat& B);          // A - B
+bool mat_inv(const Mat& A, Mat& Inv);              // 高斯-约当求逆，奇异返回 false
 
 
 // ==========================================================
@@ -104,7 +125,8 @@ bool SaveSocketStreamToFile_1min(const char* ip, unsigned short port, const char
 //                     NovAtel 数据解码
 // ==========================================================
 // NovAtel OEM7 数据解码入口
-int  __cdecl DecodeNovOem7Dat(unsigned char* buf, int& len, EPOCHOBS* obs,
+// 返回值：1 = 本次解码得到一个新的 RANGE 观测历元；0 = 未得到新历元
+int  DecodeNovOem7Dat(unsigned char* buf, int& len, EPOCHOBS* obs,
     GPSEPHREC* gpsEph, GPSEPHREC* bdsEph, POSRES* pos, int mode);
 
 // 解析RANGE观测值
@@ -145,6 +167,7 @@ void DetectOutlier(EPOCHOBS* Obs);
 void ComputeSatPVTAtSignalTrans(EPOCHOBS* Epk, GPSEPHREC* GPSEph, GPSEPHREC* BDSEph, double UserPos[3]);
 // 单点定位解算
 bool SPP(EPOCHOBS* Epoch, RAWDAT* Raw, PPRESULT* Result);
+bool SPP(EPOCHOBS* Epoch, GPSEPHREC* GpsEph, GPSEPHREC* BdsEph, PPRESULT* Result);
 // 单点测速解算
 void SPV(EPOCHOBS* Epoch, PPRESULT* Result);
 

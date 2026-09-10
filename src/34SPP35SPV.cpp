@@ -25,6 +25,12 @@ SPV 根据卫星速度 + 多普勒观测值，解算接收机三维速度（Vx/V
 
 bool SPP(EPOCHOBS* Epoch, RAWDAT* Raw, PPRESULT* Result)
 {
+	return SPP(Epoch, Raw->GpsEph, Raw->BdsEph, Result);
+}
+
+// 重载：直接传入 GPS/BDS 星历数组（RTK 模块使用 RTKData 中的星历 vector）
+bool SPP(EPOCHOBS* Epoch, GPSEPHREC* GpsEph, GPSEPHREC* BdsEph, PPRESULT* Result)
+{
 	// 1. 保存当前历元时间
 	Result->Time = Epoch->Time;
 
@@ -51,7 +57,7 @@ bool SPP(EPOCHOBS* Epoch, RAWDAT* Raw, PPRESULT* Result)
 	do {
 		// 4.1 计算信号发射时刻的卫星精确位置、钟差、对流层延迟
 		// 迭代重算卫星发射时刻PVT，固定接收机位置算有误差    迭代更新：发射时刻 → 卫星坐标 → Sagnac 自转改正 → 对流层延迟。
-		ComputeSatPVTAtSignalTrans(Epoch, Raw->GpsEph, Raw->BdsEph, X_R0);
+		ComputeSatPVTAtSignalTrans(Epoch, GpsEph, BdsEph, X_R0);
 
 		// 4.2 定义观测方程相关变量
 		double B_arr[128][5] = { 0 };      // 设计矩阵 B（行：卫星，列：X/Y/Z/GPS钟差/BDS钟差）最多128颗卫星，5列对应5个待估参数

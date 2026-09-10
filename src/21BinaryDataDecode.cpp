@@ -323,6 +323,7 @@ int DecodeNovOem7Dat(
     int mode)              // 工作模式
 {
     int i = 0;
+    int GotRange = 0;   // 本次调用是否解出了新的 RANGE 历元
     while (i < len)
     {
         // 1、查找同步字符 AA 44 12
@@ -356,10 +357,11 @@ int DecodeNovOem7Dat(
         switch (MsgID)
         {
             //调用解码函数Decode，把解析后的数据存入对应结构体obs
-        case MSGID_RANGE:      DecodeRange(buff + i, obs);      Status = 1; break;//status = 1 表示已经成功解码了一条观测数据
+        case MSGID_RANGE:      DecodeRange(buff + i, obs);      Status = 1; GotRange = 1; break;//status = 1 表示已经成功解码了一条观测数据
         case MSGID_GPS_EPHEM:   DecodeGpsEphem(buff + i, geph);  break;//星历数据
         case MSGID_BDS_EPHEM:   DecodeBdsEphem(buff + i, beph);  break;
         case MSGID_PSRPOS:      DecodePos(buff + i, pos);        break;//定位数据
+        case MSGID_BESTPOS:     DecodePos(buff + i, pos);        break;//BESTPOS 与 PSRPOS 消息体结构相同
         default: break;
         }
 
@@ -369,9 +371,9 @@ int DecodeNovOem7Dat(
     }
 
     // 剩余数据前移
-    memcpy(buff, buff + i, len - i);//把buff+i 开始剩余数据前移到缓冲区buff开头， len - i 更新缓冲区有效长度
+    memmove(buff, buff + i, len - i);//把buff+i 开始剩余数据前移到缓冲区buff开头， len - i 更新缓冲区有效长度
     len -= i;//len = len - i
-    return 0;
+    return GotRange;
 }
 
 /*-----------------------------------------------
@@ -389,15 +391,31 @@ bool OpenSocket(SOCKET& sock, const char IP[], const unsigned short Port)
     WSADATA wsaData;
     SOCKADDR_IN addrSrv;
     //初始化 Winsock 库
-    WSAStartup(MAKEWORD(1, 1), &wsaData);
+    if (WSAStartup(MAKEWORD(2, 2), &wsaData) != 0)
+    {
+        printf("WSAStartup failed.\n");
+        return false;
+    }
     // 创建套接字
     sock = socket(AF_INET, SOCK_STREAM, 0);
+    if (sock == INVALID_SOCKET)
+    {
+        printf("socket() failed.\n");
+        return false;
+    }
 
-    addrSrv.sin_addr.S_un.S_addr = inet_addr(IP);
+    memset(&addrSrv, 0, sizeof(addrSrv));
+    addrSrv.sin_addr.s_addr = inet_addr(IP);
     addrSrv.sin_family = AF_INET;
     addrSrv.sin_port = htons(Port);
 
-    connect(sock, (SOCKADDR*)&addrSrv, sizeof(SOCKADDR));
+    if (connect(sock, (SOCKADDR*)&addrSrv, sizeof(SOCKADDR)) == SOCKET_ERROR)
+    {
+        printf("connect() to %s:%d failed.\n", IP, Port);
+        closesocket(sock);
+        sock = INVALID_SOCKET;
+        return false;
+    }
 
     return true;
 }

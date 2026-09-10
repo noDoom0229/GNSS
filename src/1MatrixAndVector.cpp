@@ -339,3 +339,123 @@ double vector_magnitude(const double* vec, int size)
     double result = sqrt(sum);
     return result;
 }
+
+// ==================== RTK 新增：vector 版任意维矩阵运算 ====================
+// 说明：RTK 中 B/H/P/Q 等矩阵的维数随双差卫星数变化，
+//       原有的一维数组函数需要事先知道大小，这里用 vector<vector<double>> 更简单。
+
+Mat mat_zero(int rows, int cols)
+{
+    return Mat(rows, Vec(cols, 0.0));
+}
+
+Mat mat_eye(int n)
+{
+    Mat I = mat_zero(n, n);
+    for (int i = 0; i < n; i++) I[i][i] = 1.0;
+    return I;
+}
+
+Mat mat_trans(const Mat& A)
+{
+    int rows = (int)A.size();
+    int cols = rows > 0 ? (int)A[0].size() : 0;
+    Mat T = mat_zero(cols, rows);
+    for (int i = 0; i < rows; i++)
+        for (int j = 0; j < cols; j++)
+            T[j][i] = A[i][j];
+    return T;
+}
+
+Mat mat_mul(const Mat& A, const Mat& B)
+{
+    int m = (int)A.size();
+    int n = m > 0 ? (int)A[0].size() : 0;
+    int p = (int)B.size() > 0 ? (int)B[0].size() : 0;
+    Mat C = mat_zero(m, p);
+    if ((int)B.size() != n) return C;   // 维数不匹配，返回零阵
+    for (int i = 0; i < m; i++)
+        for (int k = 0; k < n; k++)
+        {
+            double a = A[i][k];
+            if (a == 0.0) continue;
+            for (int j = 0; j < p; j++)
+                C[i][j] += a * B[k][j];
+        }
+    return C;
+}
+
+Vec mat_mul_vec(const Mat& A, const Vec& v)
+{
+    int m = (int)A.size();
+    int n = m > 0 ? (int)A[0].size() : 0;
+    Vec r(m, 0.0);
+    if ((int)v.size() != n) return r;
+    for (int i = 0; i < m; i++)
+        for (int k = 0; k < n; k++)
+            r[i] += A[i][k] * v[k];
+    return r;
+}
+
+Mat mat_add(const Mat& A, const Mat& B)
+{
+    Mat C = A;
+    for (size_t i = 0; i < A.size() && i < B.size(); i++)
+        for (size_t j = 0; j < A[i].size() && j < B[i].size(); j++)
+            C[i][j] = A[i][j] + B[i][j];
+    return C;
+}
+
+Mat mat_sub(const Mat& A, const Mat& B)
+{
+    Mat C = A;
+    for (size_t i = 0; i < A.size() && i < B.size(); i++)
+        for (size_t j = 0; j < A[i].size() && j < B[i].size(); j++)
+            C[i][j] = A[i][j] - B[i][j];
+    return C;
+}
+
+// 高斯-约当消元求逆（列主元），与原有 4x4/5x5 求逆思路一致，只是维数可变
+bool mat_inv(const Mat& A, Mat& Inv)
+{
+    int n = (int)A.size();
+    if (n == 0) return false;
+    for (int i = 0; i < n; i++)
+        if ((int)A[i].size() != n) return false;
+
+    Mat mat = mat_zero(n, 2 * n);     // 增广矩阵 [A | I]
+    for (int i = 0; i < n; i++)
+    {
+        for (int j = 0; j < n; j++) mat[i][j] = A[i][j];
+        mat[i][n + i] = 1.0;
+    }
+
+    const double eps = 1e-14;
+    for (int col = 0; col < n; col++)
+    {
+        int pivot = col;
+        for (int r = col + 1; r < n; r++)
+            if (fabs(mat[r][col]) > fabs(mat[pivot][col])) pivot = r;
+
+        if (fabs(mat[pivot][col]) < eps) return false;   // 奇异矩阵
+
+        if (pivot != col) swap(mat[pivot], mat[col]);
+
+        double div = mat[col][col];
+        for (int j = 0; j < 2 * n; j++) mat[col][j] /= div;
+
+        for (int r = 0; r < n; r++)
+        {
+            if (r == col) continue;
+            double fac = mat[r][col];
+            if (fac == 0.0) continue;
+            for (int j = 0; j < 2 * n; j++) mat[r][j] -= fac * mat[col][j];
+        }
+    }
+
+    Inv = mat_zero(n, n);
+    for (int i = 0; i < n; i++)
+        for (int j = 0; j < n; j++)
+            Inv[i][j] = mat[i][n + j];
+    return true;
+}
