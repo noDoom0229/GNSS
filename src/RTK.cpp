@@ -19,6 +19,9 @@
 // ==========================================================
 //   辅助函数
 // ==========================================================
+// 单位约定：本工程解码时已把载波相位折算成米（DecodeRange 中 L = -λ·ADR），
+// 因此 SATOBSDATA::L、SDSatObs::dL 全部是「米」而不是「周」。
+// 只有模糊度参数 N 是周，观测方程中用 λ·N 换算。
 double get_wavelength(GNSSSys sys, int freq)
 {
     if (sys == GPS) return (freq == 0) ? WL1_GPS : WL2_GPS;
@@ -400,6 +403,7 @@ int calc_rec_sat_dis(XYZCoord& recPos, EpochData& epkObs, int& idx, DisRecSat& d
 // ==========================================================
 //   双差模糊度初值：N0 = (ΔΔL - ΔΔP) / λ   (周)
 // ==========================================================
+// ΔΔL、ΔΔP 都是米，相减消掉几何距离后除以波长得到周数。
 int init_dd_ambiguity(SDEpochObs& SDObs, DDCObs& DDObs, vector<double>& amb)
 {
     amb.clear();
@@ -427,19 +431,20 @@ int init_dd_ambiguity(SDEpochObs& SDObs, DDCObs& DDObs, vector<double>& amb)
 }
 
 // ==========================================================
-//   (8) 权阵  报告 (2-24)
+//   (8) 权阵  报告 (2-24)，课件 II-3 P42~P44
 // ==========================================================
-// 同一系统、同一频率、同一类型的 n 个双差观测值来自 n+1 个单差观测值，
-// 互相之间数学相关。若每个单差观测值方差为 σ²，则双差协方差阵为
-//     D = σ² (I + 1·1ᵀ)     对角线 2σ²，非对角线 σ²
-// 其逆（权阵）为
-//     P = 1/σ² · 1/(n+1) · [ n  -1 ... ; -1  n ... ; ... ]
-// 即对角线 n/(n+1)，非对角线 -1/(n+1)，再乘 1/σ²。
-// 报告 (2-24) 中 σ = 1；这里伪距与相位分别用 RTK_SIGMA_CODE / RTK_SIGMA_PHASE。
+// 非差观测值等方差 σ²、互不相关：
+//   站间单差   cov(SD) = 2σ² I                （单差之间数学不相关）
+//   站星双差   cov(DD) = 2σ² (I + 1·1ᵀ)       （双差之间数学相关）
+//              即对角线 4σ²，非对角线 2σ²
+// 权阵为其逆，利用 (I + 1·1ᵀ)⁻¹ = I − 1·1ᵀ/(n+1)：
+//   P = 1/(2σ²) · 1/(n+1) · [ n  -1  ... ; -1  n  ... ; ... ]
+// 与报告 (2-24) 结构一致（报告取 σ = 1）。
+// 伪距与相位分别用 RTK_SIGMA_CODE / RTK_SIGMA_PHASE。
 static void fill_block(vector<vector<double>>& P, int start, int n, double sigma)
 {
     if (n <= 0) return;
-    double w = 1.0 / (sigma * sigma);
+    double w = 1.0 / (2.0 * sigma * sigma);
     for (int i = 0; i < n; i++)
     {
         for (int j = 0; j < n; j++)
@@ -611,12 +616,98 @@ int RTK_fixed(DDCObs& ddObs, PosRes& rovPosRes, PosRes& basPosRes, ConfigInfo& c
     Vec da(n, 0.0);
     for (int i = 0; i < n; i++) da[i] = ddObs.FloatAmb[i] - ddObs.FixedAmb[i];
 
-    Vec corr = mat_mul_vec(mat_mul(Qba, QaaInv), da);
+    Mat QbaQaaInv = mat_mul(Qba, QaaInv);
+    Vec corr = mat_mul_vec(QbaQaaInv, da);
     for (int k = 0; k < 3; k++) ddObs.dPos[k] -= corr[k];
 
-    // 4. 流动站坐标 = 基准站坐标 + 固定解基线
+    // 4. 固定解坐标协方差：Q_fix = Q_bb − Q_ba Q_aa⁻¹ Q_ab（模糊度视为已知常数）
+    Mat Qab = mat_trans(Qba);
+    Mat dQ = mat_mul(QbaQaaInv, Qab);
+    for (int i = 0; i < 3; i++)
+        for (int j = 0; j < 3; j++)
+            ddObs.Q[i][j] -= dQ[i][j];
+
+    // 5. 流动站坐标 = 基准站坐标 + 固定解基线
     for (int k = 0; k < 3; k++)
         rovPosRes.Position[k] = basPosRes.Position[k] + ddObs.dPos[k];
     rovPosRes.Type = RTKFixed;
+    return 1;
+}
+
+// ==========================================================
+//   精度评定  课件 II-2 P19、II-3 P54~P56
+// ==========================================================
+// 在当前解（固定成功用固定模糊度，否则用浮点模糊度）上重建 B、P、V：
+//   单位权中误差  σ0 = sqrt(VᵀPV / r),  r = 观测数 − 参数个数
+//   残差 RMS      RMS = sqrt(VᵀV / n)
+//   坐标中误差    Q_NEU = K Q_XYZ Kᵀ
+//                 最小二乘：Q 为协因数阵，m = σ0·sqrt(q_ii)
+//                 卡尔曼：  Q 为方差阵，  m = sqrt(q_ii)
+int calc_rtk_quality(RTKData& rtkData, PosRes& basPosRes, PosRes& rovPosRes,
+    int calcMode, QualityInfo& quality)
+{
+    quality = QualityInfo();
+
+    DDCObs& dd = rtkData.DDObs;
+    int nG = (int)dd.GPSidx.size();
+    int nB = (int)dd.BDSidx.size();
+    int n = dd.AmbNum;
+    if (nG + nB < RTK_MIN_DD_SAT || n <= 0) return 0;
+    if ((int)dd.Q.size() != 3 + n) return 0;
+
+    // 1. 当前状态向量
+    const vector<double>& amb = (rovPosRes.Type == RTKFixed && (int)dd.FixedAmb.size() == n)
+        ? dd.FixedAmb : dd.FloatAmb;
+    if ((int)amb.size() != n) return 0;
+
+    vector<double> X(3 + n, 0.0);
+    for (int k = 0; k < 3; k++) X[k] = rovPosRes.Position[k];
+    for (int i = 0; i < n; i++) X[3 + i] = amb[i];
+
+    // 2. 残差与权阵
+    Mat B, P;
+    Vec V;
+    if (!get_H(rtkData.RovEpkData, rtkData.SdObs, dd, X, B)) return 0;
+    if (!get_V(rtkData.BasEpkData, rtkData.RovEpkData, basPosRes, rtkData.SdObs, dd, X, V)) return 0;
+    if (!create_P_matrix(nG, nB, P)) return 0;
+
+    quality.nObs = (int)V.size();
+    quality.nPar = 3 + n;
+    int r = quality.nObs - quality.nPar;   // 自由度
+    if (r <= 0) return 0;
+
+    double vtpv = 0.0, vtv = 0.0;
+    for (size_t i = 0; i < V.size(); i++)
+    {
+        vtv += V[i] * V[i];
+        for (size_t j = 0; j < V.size(); j++) vtpv += V[i] * P[i][j] * V[j];
+    }
+    if (vtpv < 0.0) vtpv = 0.0;
+    quality.Sigma0 = sqrt(vtpv / r);
+    quality.RMS = sqrt(vtv / quality.nObs);
+
+    // 3. 坐标中误差：XYZ -> NEU
+    double blh[3];
+    XYZ_2_BLH(rovPosRes.Position, blh, R_WGS84, F_WGS84);   // blh[0]=B blh[1]=L (deg)
+    double Brad = blh[0] * Rad, Lrad = blh[1] * Rad;
+    double sinB = sin(Brad), cosB = cos(Brad), sinL = sin(Lrad), cosL = cos(Lrad);
+
+    Mat K = mat_zero(3, 3);          // 行顺序 N, E, U
+    K[0][0] = -sinB * cosL; K[0][1] = -sinB * sinL; K[0][2] = cosB;
+    K[1][0] = -sinL;        K[1][1] = cosL;         K[1][2] = 0.0;
+    K[2][0] = cosB * cosL;  K[2][1] = cosB * sinL;  K[2][2] = sinB;
+
+    Mat Qxyz = mat_zero(3, 3);
+    for (int i = 0; i < 3; i++)
+        for (int j = 0; j < 3; j++)
+            Qxyz[i][j] = dd.Q[i][j];
+
+    Mat Qneu = mat_mul(mat_mul(K, Qxyz), mat_trans(K));
+    double scale = (calcMode == 0) ? quality.Sigma0 : 1.0;   // 卡尔曼的 Q 已是方差阵
+    quality.mENU[0] = scale * sqrt(Qneu[1][1] > 0.0 ? Qneu[1][1] : 0.0);   // E
+    quality.mENU[1] = scale * sqrt(Qneu[0][0] > 0.0 ? Qneu[0][0] : 0.0);   // N
+    quality.mENU[2] = scale * sqrt(Qneu[2][2] > 0.0 ? Qneu[2][2] : 0.0);   // U
+
+    quality.Valid = true;
     return 1;
 }

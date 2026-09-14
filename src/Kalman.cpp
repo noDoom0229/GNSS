@@ -245,12 +245,14 @@ int get_H(EpochData& rovEpkObs, SDEpochObs& SDObs, DDCObs& DDObs,
 // ==========================================================
 //   (5) 观测噪声 R  报告 3.2.3 (5)：与 P 矩阵结构对应，R = P⁻¹
 // ==========================================================
-// n 个双差观测值的协方差：对角线 2σ²，非对角线 σ²
+// 非差等方差 σ² 时，n 个双差观测值的协方差阵（课件 II-3 P43）：
+//   cov(DD) = 2σ² (I + 1·1ᵀ)   对角线 4σ²，非对角线 2σ²
 static void fill_R_block(vector<vector<double>>& R, int start, int n, double sigma)
 {
+    double s2 = sigma * sigma;
     for (int i = 0; i < n; i++)
         for (int j = 0; j < n; j++)
-            R[start + i][start + j] = (i == j) ? 2.0 * sigma * sigma : sigma * sigma;
+            R[start + i][start + j] = (i == j) ? 4.0 * s2 : 2.0 * s2;
 }
 
 int get_R(int GPSDDnum, int BDSDDnum, vector<vector<double>>& R)
@@ -277,6 +279,7 @@ int get_R(int GPSDDnum, int BDSDDnum, vector<vector<double>>& R)
 // 伪距：ΔΔP - ΔΔρ
 // 相位：ΔΔL - ΔΔρ - λ N
 // 其中 ΔΔρ = (ρ_R^j - ρ_B^j) - (ρ_R^i - ρ_B^i)，基准站坐标已知不变。
+// ΔΔP、ΔΔL、ΔΔρ 单位均为米（解码时相位已乘波长），N 为周，故用 λN 换算。
 int get_V(EpochData& basEpkObs, EpochData& rovEpkObs, PosRes& basPosRes,
     SDEpochObs& SDObs, DDCObs& DDObs, vector<double>& Xk_k1, vector<double>& V)
 {

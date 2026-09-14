@@ -13,7 +13,8 @@
 | SPP | 卫星位置/速度/钟差/钟速、Hopfield 对流层、地球自转改正、MW/GF 粗差探测、最小二乘定位与测速 |
 | RTK | 基准站/流动站时间同步、站间单差、单差 MW/GF 周跳探测、参考星选取（跳过 GEO）、站星双差 |
 | 浮点解 | 最小二乘（相关双差权阵）或卡尔曼滤波（支持参考星变化、新星升起、卫星消失） |
-| 固定解 | Lambda（LD 分解、降相关、整数搜索）、Ratio 检验（阈值 3）、固定解基线 |
+| 固定解 | Lambda（LD 分解、降相关、整数搜索）、Ratio 检验（阈值 3）、固定解基线与协方差 |
+| 精度评定 | 单位权中误差 σ0、残差 RMS、PDOP、E/N/U 方向中误差 |
 | 输出 | 屏幕、自定义结果文件、NMEA 0183 `$GPGGA`（WGS84） |
 
 系统与频率：GPS L1 + L2，BDS B1I + B3I。采样率最高 1 Hz。
@@ -46,7 +47,7 @@ GNSS_RTK/
 │   ├── 34SPP35SPV.cpp          原有：SPP / SPV
 │   ├── 36OutPutResult.cpp      原有：SPP 结果输出
 │   ├── config.cpp              新增：load_config()
-│   ├── RTK.cpp                 新增：时间同步、单差、周跳、参考星、LS 浮点解、固定解
+│   ├── RTK.cpp                 新增：时间同步、单差、周跳、参考星、LS 浮点解、固定解、精度评定
 │   ├── Kalman.cpp              新增：卡尔曼滤波浮点解
 │   ├── lambdaN.cpp             新增：Lambda 模糊度搜索
 │   ├── writeToFile.cpp         新增：RTK 结果输出
@@ -126,8 +127,10 @@ GNSS_RTK.exe config\config.ini      # PosMode = 0
 ### 自定义结果文件（`OutputFile`），每历元一行
 
 ```
-WEEK SOW X Y Z dX dY dZ Ratio SatNum Type dE dN dU
+WEEK SOW X Y Z dX dY dZ Ratio SatNum Type dE dN dU  Sigma0 RMS PDOP mE mN mU
 ```
+
+第 1~14 列严格按报告表 3；第 15~20 列是课件「精度评定与结果输出模块」要求的精度信息。
 
 | 字段 | 含义 |
 |------|------|
@@ -138,6 +141,12 @@ WEEK SOW X Y Z dX dY dZ Ratio SatNum Type dE dN dU
 | SatNum | 单差卫星数 |
 | Type | 1 = SPP，2 = RTK Float，3 = RTK Fixed |
 | dE dN dU | 相对参考坐标的 ENU 误差 (m)，无参考坐标时为 `nan` |
+| Sigma0 | 单位权中误差 √(VᵀPV/r)，理想情况接近 1；明显大于 1 说明先验中误差设小了或存在粗差 |
+| RMS | 双差残差均方根 √(VᵀV/n) (m) |
+| PDOP | 流动站 SPP 的 PDOP |
+| mE mN mU | E/N/U 方向坐标中误差 (m)，由 Q_NEU = K Q_XYZ Kᵀ 得到 |
+
+只有 RTK 解算成功的历元才有精度信息，纯 SPP 历元这 6 列输出 0。
 
 ### NMEA 文件（`NMEAOutputFile`）
 
@@ -153,7 +162,7 @@ HDOP 字段填写 SPP 的 PDOP；大地水准面差距填 0.0（alt 为椭球高
 ```
 读取配置 → 打开基/流数据 → 输出表头
 循环每个历元：
-  时间同步 get_synch_obs_file / get_synch_obs_net（|t_rov − t_bas| < 0.1 s）
+  时间同步 get_synch_obs_file / get_synch_obs_net（|t_rov − t_bas| < 0.001 s）
   基准站 SPP（基准站坐标已知时使用配置坐标）
   流动站 SPP + SPV
   form_sd_obs        站间单差 ΔP = P_R − P_B，ΔL = L_R − L_B（剔除无效/双频不全/伪距差大/低高度角，标记半周）
@@ -163,12 +172,27 @@ HDOP 字段填写 SPP 的 PDOP；大地水准面差距填 0.0（alt 为椭球高
           CalcMode 1 → float_kalman    预测 Φ、Q → 更新 K、V、R（Joseph 形式协方差）
   RTK_fixed          lambda() 得两组整数解 → Ratio = s2/s1 ≥ 阈值 → 固定解基线
                      b_fix = b_float − Q_ba Q_aa⁻¹ (a_float − a_fix)
+                     Q_fix = Q_bb − Q_ba Q_aa⁻¹ Q_ab
+  calc_rtk_quality   在最终解上重建 B/P/V，算 σ0、RMS、mE/mN/mU
   输出屏幕 / 结果文件 / NMEA → 清空历元数据
 ```
 
 观测值与参数排列（RTK.cpp 顶部注释）：模糊度 `[GPS f1 | GPS f2 | BDS f1 | BDS f2]`；
-观测行 `GPS: P f1, P f2, L f1, L f2; BDS 同`。权阵按报告 (2-24)：同一块内对角 `n/(n+1)`、
-非对角 `−1/(n+1)`，再乘 `1/σ²`（`RTK_SIGMA_CODE/PHASE` 设为 1 即与报告完全一致）。
+观测行 `GPS: P f1, P f2, L f1, L f2; BDS 同`。
+
+**单位约定**：原工程解码时已把载波相位折算成米（`L = -λ·ADR`），所以 `SATOBSDATA::L`、
+`SDSatObs::dL` 的单位都是米而不是周（原代码注释写的是“周”，实际是米）。
+只有模糊度参数是周，观测方程里用 `λ·N` 换算。
+
+**权阵**（报告 (2-24)，课件 II-3 P42~P44）：非差等方差 σ²、互不相关时，
+站间单差 `cov(SD) = 2σ²I`，站星双差 `cov(DD) = 2σ²(I + 1·1ᵀ)`，因此
+
+```
+P = 1/(2σ²) · 1/(n+1) · [ n  −1 … ; −1  n … ]
+```
+
+伪距、相位分别取 `RTK_SIGMA_CODE`、`RTK_SIGMA_PHASE`（非差中误差，默认 0.3 m / 0.003 m），
+GPS 与 BDS、伪距与相位、f1 与 f2 各自成块，整体块对角。
 
 ## 11. 常见错误
 
@@ -181,6 +205,8 @@ HDOP 字段填写 SPP 的 PDOP；大地水准面差距填 0.0（alt 为椭球高
 | `Not enough double-difference satellites` | 高度角/伪距差阈值过严，或两站共视卫星少 |
 | `RTK solution failed, SPP result only.` | 浮点解失败（法方程奇异、迭代不收敛），本历元只输出 SPP |
 | Ratio 一直小于 3 | 观测质量差、电离层活跃；可检查 `RTK_SIGMA_CODE/PHASE`，或数据本身问题 |
+| 一个历元都算不出来 | 先看时间同步：`RTK_SYNC_DT` 默认 0.001 s（课件要求），若两站采样时刻本身有偏差需放宽 |
+| Sigma0 明显大于 1 | 先验中误差设小了或存在未探测到的粗差/周跳 |
 | 卡尔曼频繁 `filter re-initialized` | 历元间隔大于 `KF_MAX_GAP`（默认 1.5 s），数据缺失导致 |
 | MSVC 报 C4819 编码警告 | 确认已用 CMake 生成（含 `/utf-8`） |
 
@@ -193,7 +219,8 @@ HDOP 字段填写 SPP 的 PDOP；大地水准面差距填 0.0（alt 为椭球高
 5. 将 `CalcMode` 改为 1 重复测试卡尔曼滤波；对比两者 Ratio 与固定率。
 6. 网络测试：`PosMode = 1`，填写 IP/端口后运行。
 
-**说明**：本仓库不含实测数据。代码已在 Linux(g++) 下完成编译、单元测试
-（矩阵求逆、P/R 互逆、Lambda 搜索、NMEA 校验和）和仿真几何下的端到端算法自洽性验证
-（已知基线与整数模糊度可被最小二乘与卡尔曼流程正确恢复）；**尚未用真实 OEM719 数据验证**，
-真实数据下的精度与固定率需要用户在 Windows 下运行确认。
+**说明**：本仓库不含实测数据。代码已在 Linux(g++) 下完成编译（零警告）、单元测试
+（任意维矩阵求逆、权阵数值与课件 P43 例子一致、P 与 R 互逆、Lambda 搜索、NMEA 校验和、配置读取）
+以及仿真几何下的端到端验证：已知基线 + 已知整周模糊度，14 颗星（8 GPS + 6 BDS）单历元双频解算，
+最小二乘与卡尔曼均正确固定 24 个双差模糊度，固定解基线误差 1~5 mm。
+**尚未用真实 OEM719 数据验证**，真实数据下的精度与固定率需要在 Windows 下运行确认。

@@ -32,12 +32,13 @@ typedef MWGF       ComObs;     // MW / GF 组合观测值
 // ==========================================================
 //   RTK 相关常量（报告未给出具体数值的项集中放在这里，便于修改）
 // ==========================================================
-#define RTK_SYNC_DT        0.1     // 基准站/流动站时间同步阈值 (s)
+#define RTK_SYNC_DT        0.001   // 基准站/流动站时间同步阈值 (s)  课件 II-3 P19：对齐误差 < 0.001 s
 #define RTK_MIN_DD_SAT     2       // 最少双差卫星数（4n 个观测 >= 3 + 2n 个未知数 => n >= 2）
 #define RTK_LS_MAX_ITER    10      // 最小二乘最大迭代次数
 #define RTK_LS_CONV_THRES  1e-4    // 最小二乘位置改正数收敛阈值 (m)
-#define RTK_SIGMA_CODE     0.3     // 单差伪距先验中误差 (m)   设为 1.0 即与报告 (2-24) 权阵完全一致
-#define RTK_SIGMA_PHASE    0.003   // 单差相位先验中误差 (m)   设为 1.0 即与报告 (2-24) 权阵完全一致
+// 非差观测值中误差（等方差模型，课件 II-3 P42~P44 的权阵推导以此为前提）
+#define RTK_SIGMA_CODE     0.3     // 非差伪距中误差 (m)
+#define RTK_SIGMA_PHASE    0.003   // 非差相位中误差 (m)
 #define KF_POS_SIGMA       5.0     // 卡尔曼初始化位置中误差 (m)        报告：5 m
 #define KF_AMB_SIGMA       50.0    // 卡尔曼初始化模糊度中误差 (周)     报告：50 周
 #define KF_POS_NOISE       5.0     // 位置过程噪声中误差 (m)            报告：5 m
@@ -212,6 +213,28 @@ struct ConfigInfo
 };
 
 // ==========================================================
+//   (9) 精度评定信息（课件 II-2 P19「精度评定与结果输出模块」，
+//        II-3 P54~P56 精度评定公式）
+// ==========================================================
+struct QualityInfo
+{
+    double Sigma0;   // 单位权中误差 sqrt(VᵀPV / r)
+    double RMS;      // 观测值残差 RMS sqrt(VᵀV / n)
+    double mENU[3];  // E / N / U 方向中误差 (m)
+    int    nObs;     // 双差观测值个数
+    int    nPar;     // 待估参数个数
+    bool   Valid;
+
+    QualityInfo()
+    {
+        Sigma0 = RMS = 0.0;
+        mENU[0] = mENU[1] = mENU[2] = 0.0;
+        nObs = nPar = 0;
+        Valid = false;
+    }
+};
+
+// ==========================================================
 //   (8) 接收机到卫星距离
 // ==========================================================
 struct DisRecSat
@@ -260,6 +283,9 @@ int calc_rec_sat_dis(XYZCoord& recPos, EpochData& epkObs, int& idx, DisRecSat& d
 int create_P_matrix(int nGPS, int nBDS, vector<vector<double>>& P);
 int LSS_RTK_float(RTKData& rtkData, PosRes& basPosRes, PosRes& rovPosRes);
 int RTK_fixed(DDCObs& ddObs, PosRes& rovPosRes, PosRes& basPosRes, ConfigInfo& cfg);
+// 精度评定：在当前解上重建 B / P / V，计算单位权中误差、RMS 与 ENU 中误差
+int calc_rtk_quality(RTKData& rtkData, PosRes& basPosRes, PosRes& rovPosRes,
+    int calcMode, QualityInfo& quality);
 
 // 辅助：某频率的载波波长 (m)
 double get_wavelength(GNSSSys sys, int freq);
@@ -301,5 +327,7 @@ int lambda(int n, int m, const double* a, const double* Q, double* F, double* s)
 //   writeToFile.cpp
 // ==========================================================
 void write_header_RTK(FILE* fp);
-void write_2_screen_RTK(PosRes& rovPosRes, PosRes& basPosRes, DDCObs& ddObs, SDEpochObs& sdObs, const double refXYZ[3]);
-void write_2_file_RTK(FILE* fp, PosRes& rovPosRes, PosRes& basPosRes, DDCObs& ddObs, SDEpochObs& sdObs, const double refXYZ[3]);
+void write_2_screen_RTK(PosRes& rovPosRes, PosRes& basPosRes, DDCObs& ddObs, SDEpochObs& sdObs,
+    QualityInfo& quality, const double refXYZ[3]);
+void write_2_file_RTK(FILE* fp, PosRes& rovPosRes, PosRes& basPosRes, DDCObs& ddObs, SDEpochObs& sdObs,
+    QualityInfo& quality, const double refXYZ[3]);

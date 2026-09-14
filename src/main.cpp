@@ -202,10 +202,13 @@ int main(int argc, char* argv[])
         }
 
         // 5.6 Lambda 固定 + Ratio 检验
+        QualityInfo quality;
         if (floatOK)
         {
             floatCount++;
             if (RTK_fixed(rtk.DDObs, rovPosRes, basPosRes, cfg)) fixedCount++;
+            // 5.7 精度评定（在最终解上计算）
+            calc_rtk_quality(rtk, basPosRes, rovPosRes, cfg.CalcMode, quality);
         }
         else
         {
@@ -213,14 +216,14 @@ int main(int argc, char* argv[])
                 rtk.RovEpkData.Time.Week, rtk.RovEpkData.Time.SecOfWeek);
         }
 
-        // 5.7 输出
+        // 5.8 输出
         double refXYZ[3];
         get_reference_xyz(cfg, rtk.RovBestPos, refXYZ);
-        write_2_screen_RTK(rovPosRes, basPosRes, rtk.DDObs, rtk.SdObs, refXYZ);
-        write_2_file_RTK(fpOut, rovPosRes, basPosRes, rtk.DDObs, rtk.SdObs, refXYZ);
+        write_2_screen_RTK(rovPosRes, basPosRes, rtk.DDObs, rtk.SdObs, quality, refXYZ);
+        write_2_file_RTK(fpOut, rovPosRes, basPosRes, rtk.DDObs, rtk.SdObs, quality, refXYZ);
         print_NMEA(rovPosRes, fpNMEA);
 
-        // 5.8 清空当前历元
+        // 5.9 清空当前历元
         end_epoch(rtk, cfg);
     }
 
