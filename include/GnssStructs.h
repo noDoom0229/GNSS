@@ -81,11 +81,12 @@ struct SATOBSDATA
     short Prn;                  // 卫星PRN编号
     GNSSSys System;            // 卫星系统类型（GPS/BDS/GLONASS等）
     double P[2];                // 伪距观测值（m），双频
-    double L[2];                // 载波相位观测值（周），双频
-    double D[2];                // 多普勒观测值
-    double cn0[2];              // 载噪比 C/N0
-    double LockTime[2];         // 相位锁定时间
-    unsigned char half[2];      // 半周标记
+    double L[2];                // 载波相位观测值，双频。注意：解码时已乘波长，单位是【米】不是周
+    double D[2];                // 多普勒观测值（已乘波长，m/s）
+    double cn0[2];              // 载噪比 C/N0 (dB-Hz)
+    double LockTime[2];         // 相位锁定时间 (s)
+    unsigned char half[2];      // 半周标记（= NovAtel Parity known flag，0 表示可能存在半周）
+    unsigned char LLI[2];       // RINEX 失锁标记：bit0 = 失锁重捕，bit1 = 半周模糊
     bool Valid;                 // 观测值是否有效
 
     SATOBSDATA()
@@ -93,7 +94,10 @@ struct SATOBSDATA
         Prn = 0;
         System = UnknownSys;
         for (int i = 0; i < 2; i++)
-            P[i] = L[i] = D[i] = 0.0;
+        {
+            P[i] = L[i] = D[i] = cn0[i] = LockTime[i] = 0.0;
+            half[i] = LLI[i] = 0;
+        }
         Valid = false;
     }
 };
@@ -217,10 +221,18 @@ struct EPOCHOBS
     MWGF       ComObs[MAXCHANNUM];  // 组合观测值
     double Pos[3];            // 接收机位置
 
+    // 上一历元的相位锁定时间，用于判断是否失锁重捕（RINEX LLI 的 bit0）。
+    // 观测值数组每历元都会清零，所以锁定时间要单独按 PRN 存一份。
+    // 第一维 0 = GPS，1 = BDS；第二维 PRN-1；第三维频率
+    double LockPrev[2][MAXBDSNUM][2];
+
     EPOCHOBS()
     {
         SatNum = 0;
         Pos[0] = Pos[1] = Pos[2] = 0.0;
+        for (int s = 0; s < 2; s++)
+            for (int i = 0; i < MAXBDSNUM; i++)
+                LockPrev[s][i][0] = LockPrev[s][i][1] = -1.0;   // -1 表示还没见过这颗卫星
     }
 };
 

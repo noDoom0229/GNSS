@@ -121,6 +121,27 @@ int main(int argc, char* argv[])
         fclose(fpOut);
         return -1;
     }
+    // 解码结果输出（讲义要求：两站解码数据按自定义格式输出，便于与 RINEX 对比）
+    FILE* fpBasObs = NULL, * fpRovObs = NULL;
+    if (cfg.DecodeOutput == 1)
+    {
+        fpBasObs = fopen(cfg.BasObsFile.c_str(), "w");
+        fpRovObs = fopen(cfg.RovObsFile.c_str(), "w");
+        if (fpBasObs == NULL || fpRovObs == NULL)
+        {
+            printf("Cannot open decoded observation file: %s / %s\n",
+                cfg.BasObsFile.c_str(), cfg.RovObsFile.c_str());
+            if (fpBasObs) fclose(fpBasObs);
+            if (fpRovObs) fclose(fpRovObs);
+            fclose(fpOut);
+            fclose(fpNMEA);
+            return -1;
+        }
+        write_obs_header(fpBasObs, "BASE");
+        write_obs_header(fpRovObs, "ROVER");
+        printf("Decoded observations -> %s / %s\n", cfg.BasObsFile.c_str(), cfg.RovObsFile.c_str());
+    }
+
     write_header_RTK(fpOut);
 
     // ===================== 4. 解算所需结构体 =====================
@@ -150,7 +171,14 @@ int main(int argc, char* argv[])
         }
         epochCount++;
 
-        // 5.2 基准站 SPP（同时得到卫星位置、高度角）
+        // 5.2 输出本历元两站的解码结果（放在 SPP 之前，保证即使后续解算失败也能留下原始解码数据）
+        if (cfg.DecodeOutput == 1)
+        {
+            write_obs_epoch(fpBasObs, rtk.BasEpkData);
+            write_obs_epoch(fpRovObs, rtk.RovEpkData);
+        }
+
+        // 5.3 基准站 SPP（同时得到卫星位置、高度角）
         DetectOutlier(&rtk.BasEpkData);
         bool basOK = SPP(&rtk.BasEpkData, rtk.GPSEphemList.data(), rtk.BDSEphemList.data(), &basPosRes);
         if (basKnown)
@@ -229,6 +257,15 @@ int main(int argc, char* argv[])
 
     // ===================== 6. 收尾 =====================
     printf("Epochs: %d, RTK float: %d, RTK fixed: %d\n", epochCount, floatCount, fixedCount);
+
+    // 星历是逐条累积的，跑完整个文件后一次性输出
+    if (cfg.DecodeOutput == 1)
+    {
+        fclose(fpBasObs);
+        fclose(fpRovObs);
+        // 报告的 RTKData 中两站共用一份星历表（同一批卫星播发的同一份导航电文），故只输出一个文件
+        write_nav_file(cfg.NavOutFile, rtk.GPSEphemList.data(), rtk.BDSEphemList.data(), "BASE+ROVER");
+    }
 
     fclose(fpOut);
     fclose(fpNMEA);

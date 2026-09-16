@@ -75,8 +75,9 @@ unsigned int crc32(const unsigned char* buff, int len)
 void DecodeRange(unsigned char* data, EPOCHOBS* obs)
 {
     GNSSSys sys;                             // 卫星系统类型     0 GPS，4 北斗
-    int i, n = 0, j, k = 0;                   // 循环变量卫星索引  
+    int i, n = -1, j, k = -1;                 // 循环变量卫星索引  
     //i =第几条观测    同一颗卫星多条频点观测，记录在同一个 n 的位置     k记录最后一颗有效卫星所在数组下标
+    // k 初值必须为 -1：本历元一颗卫星都没解出来时，SatNum 才会是 0 而不是 1
     int Prn, Freq;                            // 卫星PRN号，频率索引    系统+PRN号唯一确定一颗卫星，Freq = 0/1 代表第一/第二频点
     double wl;                                // 载波波长   
     unsigned int ChanStatus;                  // 通道状态字 
@@ -91,7 +92,20 @@ void DecodeRange(unsigned char* data, EPOCHOBS* obs)
 
     // 2获取当前历元观测值总数，初始化观测值存储区
     int ObsNum = UI4(p + OFFSET_OBS_NUM);
+
+    // 清空观测值之前，先把上一历元的锁定时间按 PRN 存下来，用于本历元判断失锁（LLI bit0）
+    double lockPrev[2][MAXBDSNUM][2];
+    for (int s = 0; s < 2; s++)
+        for (int q = 0; q < MAXBDSNUM; q++)
+            for (int f = 0; f < 2; f++)
+                lockPrev[s][q][f] = obs->LockPrev[s][q][f];
+
     memset(obs->SatObs, 0, MAXCHANNUM * sizeof(SATOBSDATA));//memset 将卫星观测数组全部清零，清除上一历元残留脏数据。
+
+    // 本历元没再出现的卫星，锁定时间置回 -1，下次出现时按“重新捕获”处理
+    for (int s = 0; s < 2; s++)
+        for (int q = 0; q < MAXBDSNUM; q++)
+            obs->LockPrev[s][q][0] = obs->LockPrev[s][q][1] = -1.0;
 
     // 3循环解析每一个观测值
     //for(【初始化语句】;【循环条件】;【每次循环末尾执行】)
@@ -126,6 +140,7 @@ void DecodeRange(unsigned char* data, EPOCHOBS* obs)
 
         // 获取卫星PRN号，查找对应存储位置（已存在/空槽位）
         Prn = UI2(p + OFFSET_PRIMARY_PRN);
+        n = -1;                 // 每条观测都要重新定位槽位，找不到就丢弃，不能沿用上一条的 n
         for (j = 0; j < MAXCHANNUM; j++)
         {
             //一条观测对应一个频点。同一颗卫星多条频点观测，要存到同一个卫星结构体内部不同 Freq 下标，不能分开存多条卫星。
@@ -140,6 +155,7 @@ void DecodeRange(unsigned char* data, EPOCHOBS* obs)
                 k = n = j; break;//k记录当前历元有效卫星数量，n记录当前观测值存储位置
             }
         }
+        if (n < 0) continue;    // 通道数已满，丢弃这条观测
 
         // 填充观测值数据（伪距相位多普勒载噪比锁定时间校验标志）
         obs->SatObs[n].Prn = Prn;
@@ -151,8 +167,24 @@ void DecodeRange(unsigned char* data, EPOCHOBS* obs)
         // 多普勒：多普勒距离变化率 = -波长 × 多普勒(Hz)
         obs->SatObs[n].D[Freq] = -wl * R4(p + OFFSET_PRIMARY_D);
         obs->SatObs[n].cn0[Freq] = R4(p + OFFSET_PRIMARY_CN0);
-        obs->SatObs[n].LockTime[Freq] = R4(p + OFFSET_PRIMARY_LOCK);
+        double lockTime = R4(p + OFFSET_PRIMARY_LOCK);
+        obs->SatObs[n].LockTime[Freq] = lockTime;
         obs->SatObs[n].half[Freq] = ParityFlag;
+
+        // RINEX 失锁标记 LLI：bit0 = 与上一历元之间失过锁，bit1 = 存在半周模糊
+        // NovAtel 没有直接给 LLI，按锁定时间和奇偶校验标志推：
+        //   相位环没锁 或 锁定时间比上一历元变小（计数被清零重新累积）=> 失锁
+        //   Parity known flag = 0 => 相位可能差半周
+        unsigned char lli = 0;
+        int sysIdx = (sys == GPS) ? 0 : 1;
+        double prev = (Prn >= 1 && Prn <= MAXBDSNUM) ? lockPrev[sysIdx][Prn - 1][Freq] : -1.0;
+        if (PhaseLockFlag != 1) lli |= 1;
+        else if (prev >= 0.0 && lockTime < prev) lli |= 1;
+        if (ParityFlag == 0) lli |= 2;
+        obs->SatObs[n].LLI[Freq] = lli;
+
+        if (Prn >= 1 && Prn <= MAXBDSNUM)
+            obs->LockPrev[sysIdx][Prn - 1][Freq] = lockTime;
     }
 
     // 4统计当前历元有效卫星数量
@@ -181,8 +213,8 @@ void DecodeGpsEphem(unsigned char* data, GPSEPHREC geph[])
     eph->TOC.Week = eph->TOE.Week;
     eph->TOC.SecOfWeek = R8(p + 164);
     //星历标识     IODE：星历数据龄期（轨道参数版本号       IODC：钟差数据龄期（钟参数版本号）
-    eph->IODE = UI4(p + 16);
-    eph->IODC = UI4(p + 20);
+    eph->IODE = UI4(p + 16);    // IODE1
+    eph->IODC = UI4(p + 160);   // GPSEPHEM 报文里 IODC 在偏移 160，偏移 20 是 IODE2
     //卫星健康状态
     eph->SVHealth = UI4(p + 12);   //非 0 代表卫星故障，定位时剔除该卫星
     //轨道根数改正项
@@ -209,6 +241,8 @@ void DecodeGpsEphem(unsigned char* data, GPSEPHREC geph[])
     eph->ClkDrift = R8(p + 188);        // 钟速
     eph->ClkDriftRate = R8(p + 196);   // 钟漂
     //群延时
+    // GPSEPHEM 报文只播发一个 TGD（对应 L1），BDS 才有 TGD1/TGD2 两个。
+    // 本工程 GPS 用双频无电离层组合定位，TGD 已被组合消去，故两个字段取同值不影响解算。
     eph->TGD1 = R8(p + 172);
     eph->TGD2 = R8(p + 172);
 

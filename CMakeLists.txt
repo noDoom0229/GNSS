@@ -19,6 +19,7 @@ set(SOURCES
     src/RTK.cpp
     src/Kalman.cpp
     src/lambdaN.cpp
+    src/writeObs.cpp
     src/writeToFile.cpp
     src/main.cpp
 )

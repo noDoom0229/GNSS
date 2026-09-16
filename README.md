@@ -9,7 +9,7 @@
 
 | 类别 | 功能 |
 |------|------|
-| 数据 | 读取二进制文件或 TCP 实时流；解码广播星历（GPS/BDS）、RANGE 观测值、PSRPOS/BESTPOS |
+| 数据 | 读取二进制文件或 TCP 实时流；解码广播星历（GPS/BDS）、RANGE 观测值、BESTPOS/PSRPOS；两站解码结果按自定义格式输出，便于与 RINEX 对照 |
 | SPP | 卫星位置/速度/钟差/钟速、Hopfield 对流层、地球自转改正、MW/GF 粗差探测、最小二乘定位与测速 |
 | RTK | 基准站/流动站时间同步、站间单差、单差 MW/GF 周跳探测、参考星选取（跳过 GEO）、站星双差 |
 | 浮点解 | 最小二乘（相关双差权阵）或卡尔曼滤波（支持参考星变化、新星升起、卫星消失） |
@@ -50,6 +50,7 @@ GNSS_RTK/
 │   ├── RTK.cpp                 新增：时间同步、单差、周跳、参考星、LS 浮点解、固定解、精度评定
 │   ├── Kalman.cpp              新增：卡尔曼滤波浮点解
 │   ├── lambdaN.cpp             新增：Lambda 模糊度搜索
+│   ├── writeObs.cpp            新增：解码结果输出（观测值 + 星历，对照 RINEX）
 │   ├── writeToFile.cpp         新增：RTK 结果输出
 │   └── main.cpp                RTK 主流程
 ├── config/config.ini
@@ -89,6 +90,11 @@ RovPort = 4002
 
 NMEAOutputFile = output/result.nmea
 OutputFile = output/result.txt
+
+DecodeOutput = 1                      ; 1 = 输出解码后的观测值与星历（对照 RINEX 检查）
+BasObsFile = output/base_obs.txt
+RovObsFile = output/rove_obs.txt
+NavOutFile = output/nav.txt
 
 BasX = 0   BasY = 0   BasZ = 0   ; 基准站已知坐标（全 0 时用基准站 SPP 结果）
 RovX = 0   RovY = 0   RovZ = 0   ; 流动站参考坐标，只用于 dE/dN/dU（全 0 时用流动站 BESTPOS）
@@ -183,6 +189,32 @@ WEEK SOW X Y Z dX dY dZ Ratio SatNum Type dE dN dU  Sigma0 RMS PDOP mE mN mU
 | mE mN mU | E/N/U 方向坐标中误差 (m)，由 Q_NEU = K Q_XYZ Kᵀ 得到 |
 
 只有 RTK 解算成功的历元才有精度信息，纯 SPP 历元这 6 列输出 0。
+
+### 解码结果文件（`DecodeOutput = 1` 时输出）
+
+用于和 RINEX 转换结果逐历元对照，检查解码是否正确。基准站与流动站各输出一个观测值文件；
+星历两站共用一份（报告的 `RTKData` 中就是一份星历表，同一批卫星播发的是同一份导航电文）。
+
+**观测值文件** `BasObsFile` / `RovObsFile`：
+
+```
+> 2024 02 27 02 00  0.000  2303 180000.000   2
+ G01   22345678.123   117456789.125    1234.500  45.2  0   22345680.456    91234567.875     961.200  42.1  0
+ C20   23456789.321   122333444.500     800.500  41.0  0   23456791.654    99888777.250     650.250  38.5  2
+```
+
+历元行 `> 年 月 日 时 分 秒 WEEK SOW 卫星数`；卫星行 `SYS PRN` 后是两个频点各 5 个字段：
+伪距 (m)、相位 (cycle)、多普勒 (Hz)、载噪比 (dB-Hz)、LLI。`G` = GPS (L1/L2)，`C` = BDS (B1I/B3I)。
+
+单位特意换算成与 RINEX 一致：程序内部相位和多普勒都乘过波长（米、米/秒），输出时除回波长，
+所以可以和 RINEX OBS 里的 `L1C/L2W`、`D1C/D2W` 直接逐个数值比对。观测值为 0 表示该频点没观测到。
+
+LLI 是按 RINEX 定义生成的：`bit0` = 与上一历元之间失过锁（相位环未锁定，或锁定时间比上一历元变小
+说明计数被清零重新累积），`bit1` = 半周模糊（NovAtel 的 Parity known flag 为 0）。
+
+**星历文件** `NavOutFile`：每颗卫星一条最新星历，按 RINEX NAV 的行排列（首行 PRN + 参考时刻 +
+三个钟参数，其后每行 4 个轨道参数），本工程没解码的字段（L2 码指示、拟合区间等）留 0。
+时间系统也与 RINEX 一致：GPS 星历用 GPS 时，BDS 星历用北斗时。
 
 ### NMEA 文件（`NMEAOutputFile`）
 

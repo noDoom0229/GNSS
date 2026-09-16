@@ -71,6 +71,10 @@ bool load_config(const string& filename, ConfigInfo& config)
     config.RovPort = get_int(kv, "RovPort", 0);
     config.NMEAOutputFile = get_str(kv, "NMEAOutputFile", "output/result.nmea");
     config.OutputFile = get_str(kv, "OutputFile", "output/result.txt");
+    config.DecodeOutput = get_int(kv, "DecodeOutput", 0);
+    config.BasObsFile = get_str(kv, "BasObsFile", "output/base_obs.txt");
+    config.RovObsFile = get_str(kv, "RovObsFile", "output/rove_obs.txt");
+    config.NavOutFile = get_str(kv, "NavOutFile", "output/nav.txt");
     config.PosMode = get_int(kv, "PosMode", 0);
     config.CalcMode = get_int(kv, "CalcMode", 0);
     config.BasX = get_double(kv, "BasX", 0.0);

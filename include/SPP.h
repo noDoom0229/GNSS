@@ -193,6 +193,10 @@ struct ConfigInfo
     int BasPort, RovPort;
     string NMEAOutputFile;
     string OutputFile;
+    // 解码结果输出（讲义要求：解码数据按自定义格式输出，便于与 RINEX 对比）
+    int    DecodeOutput;       // 0 = 不输出，1 = 输出
+    string BasObsFile, RovObsFile;   // 两站观测值文件（各站分别输出）
+    string NavOutFile;               // 星历文件（报告的 RTKData 中两站共用一份星历表）
     int PosMode;          // 数据来源：0 = 二进制文件，1 = 网络实时流
     int CalcMode;         // 浮点解方式：0 = 最小二乘，1 = 卡尔曼滤波
     double BasX, BasY, BasZ;   // 基准站已知坐标 (全为 0 时用基准站 SPP 结果)
@@ -205,6 +209,7 @@ struct ConfigInfo
     {
         BasPort = RovPort = 0;
         PosMode = CalcMode = 0;
+        DecodeOutput = 0;
         BasX = BasY = BasZ = RovX = RovY = RovZ = 0.0;
         ElevThreshold = 10.0;
         PseuThreshold = 10.0;
@@ -326,6 +331,11 @@ int lambda(int n, int m, const double* a, const double* Q, double* F, double* s)
 // ==========================================================
 //   writeToFile.cpp
 // ==========================================================
+// ---------- 解码结果输出 writeObs.cpp（讲义「数据解码」模块，用于与 RINEX 对照） ----------
+void write_obs_header(FILE* fp, const char* station);
+void write_obs_epoch(FILE* fp, EpochData& obs);
+int  write_nav_file(const string& path, GPSEPHREC* gpsEph, GPSEPHREC* bdsEph, const char* station);
+
 void write_header_RTK(FILE* fp);
 void write_2_screen_RTK(PosRes& rovPosRes, PosRes& basPosRes, DDCObs& ddObs, SDEpochObs& sdObs,
     QualityInfo& quality, const double refXYZ[3]);
