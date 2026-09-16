@@ -73,8 +73,8 @@ extern int mode;
 // 星历与定位消息ID
 #define MSGID_GPS_EPHEM         7                // GPS星历ID
 #define MSGID_BDS_EPHEM         1696             // BDS星历ID
-#define MSGID_PSRPOS            42               // 单点定位ID
-#define MSGID_BESTPOS           47               // 最优融合定位ID
+#define MSGID_BESTPOS           42               // BESTPOS 最优定位结果ID
+#define MSGID_PSRPOS            47               // PSRPOS 伪距单点定位结果ID
 
 // 通道状态位
 #define BIT_PARITY              11               // 奇偶校验位
